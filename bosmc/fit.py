@@ -5,7 +5,7 @@ from bosmc.models import SMCFullyBayesianSingleTaskGP, WeightedGaussianMixturePo
 
 from botorch.models.transforms import Normalize, Standardize
 
-def fit_fully_bayes_model_nut_smc(
+def fit_fully_bayes_model_nuts(
         model: SMCFullyBayesianSingleTaskGP,
         max_tree_depth: int = 6,
         num_iters: int = 128,
@@ -39,7 +39,7 @@ def fit_fully_bayes_model_nut_smc(
     model.eval()
 
 
-def fit_fully_bayes_model_rw_smc(
+def fit_fully_bayes_model_rw(
         model: SMCFullyBayesianSingleTaskGP,
         num_iters: int = 64,
         num_samples: int = 64,
@@ -82,7 +82,7 @@ def _test():
                                          input_transform=Normalize(d=dim),
                                          outcome_transform=Standardize(m=1),)
     
-    fit_fully_bayes_model_rw_smc(model = model,
+    fit_fully_bayes_model_rw(model = model,
                                  num_iters = 8,
                                  num_samples = 4,
                                  disable_progbar=True)

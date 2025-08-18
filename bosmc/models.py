@@ -198,7 +198,11 @@ class SMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
         self.smc_weights = weights
     
     def forward(self, X: Tensor) -> MultivariateNormal:
-        """Forward pass through the batched GP model."""
+        """
+        Forward pass through the batched GP model.
+        
+        Returns unweighted multivariate normal predictor
+        """
         self._check_if_fitted()
         
         # Transform inputs
