@@ -13,9 +13,19 @@ class BaseTarget(ABC):
         provided either bounds, or constraints are not None
         bounds are simple box constraints set on x, [[min0, min1],[max0, max1]
         """
+        self.num_evals = 0
         self.dim: int | None = None
         self.bounds: torch.Tensor | None = None
+        self.target_name: str = None
         pass
+
+    @abstractmethod
+    def get_results(self) -> dict:
+        """
+        return results in a dict
+        """
+        pass
+
 
     @abstractmethod
     def sample(self,

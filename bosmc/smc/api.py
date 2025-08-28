@@ -372,8 +372,8 @@ def _test_nuts():
         return y
     
     print("Running SMC...")
-    nuts = NUTSSMCKernel(model, step_size=0.1, max_tree_depth=5)
-    smc = SMC(nuts, num_samples=100, num_iters=50, ess_threshold=0.5)
+    nuts = NUTSSMCKernel(model, step_size=0.3, max_tree_depth=20)
+    smc = SMC(nuts, num_samples=100, num_iters=100, ess_threshold=0.5)
     smc.run(data)
     
     print("\nTrue coefficients:", true_coefs)
