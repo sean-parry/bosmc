@@ -1,12 +1,13 @@
 from bosmc.smc.api import SMC
 from bosmc.smc.nuts import NUTSSMCKernel
+from bosmc.smc.nutsAR import NUTSSMCKernelAR
 from bosmc.smc.rw import RandomWalkSMCKernel
-from bosmc.models import SMCFullyBayesianSingleTaskGP, WeightedGaussianMixturePosterior
+from bosmc.models import SaaSSMCFullyBayesianSingleTaskGP, WeightedGaussianMixturePosterior
 
 from botorch.models.transforms import Normalize, Standardize
 
-def fit_fully_bayes_model_nuts(
-        model: SMCFullyBayesianSingleTaskGP,
+def fit_fully_bayesian_model_nuts_smc(
+        model: SaaSSMCFullyBayesianSingleTaskGP,
         max_tree_depth: int = 6,
         num_iters: int = 128,
         num_samples: int = 128,
@@ -16,7 +17,7 @@ def fit_fully_bayes_model_nuts(
 
     model.train()
 
-    nuts = NUTSSMCKernel(
+    nuts = NUTSSMCKernelAR(
         model.pyro_model.sample,
         jit_compile=jit_compile,
         full_mass=True,
@@ -34,13 +35,17 @@ def fit_fully_bayes_model_nuts(
 
     samples, weights = smc.get_weighted_samples()
 
-    model.load_smc_samples(samples, weights)
+    samples = model.pyro_model.postprocess_mcmc_samples(samples)
+
+    model.load_mcmc_samples(samples)
+
+    model.set_weigths(weights)
 
     model.eval()
 
 
 def fit_fully_bayes_model_rw(
-        model: SMCFullyBayesianSingleTaskGP,
+        model: SaaSSMCFullyBayesianSingleTaskGP,
         num_iters: int = 64,
         num_samples: int = 64,
         disable_progbar: bool = False,
@@ -77,16 +82,19 @@ def _test():
     dim = 1
     train_X = torch.rand((n_data_points, dim), dtype=torch.float64)
     train_y = torch.rand((n_data_points, 1), dtype=torch.float64)
-    model = SMCFullyBayesianSingleTaskGP(train_X, 
+    model = SaaSSMCFullyBayesianSingleTaskGP(train_X, 
                                          train_y,
                                          input_transform=Normalize(d=dim),
                                          outcome_transform=Standardize(m=1),)
     
-    fit_fully_bayes_model_rw(model = model,
-                                 num_iters = 8,
-                                 num_samples = 4,
-                                 disable_progbar=True)
+    fit_fully_bayesian_model_nuts_smc(model = model,
+                               num_iters = 8,
+                               num_samples = 4,
+                               disable_progbar=False)
     
     test_data: int = 1
     gauss_mix = model.posterior(torch.rand((test_data, dim), dtype=torch.float64))
     return
+
+if __name__ == '__main__':
+    _test()

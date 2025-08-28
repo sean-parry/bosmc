@@ -19,6 +19,7 @@ class Branin(BaseTarget):
         super().__init__()
         self.dim = 2
         self.bounds = torch.tensor([[-5, 0], [10, 15]]).to(torch.double)
+        self.target_name = 'branin'
 
         # values for tracking
         self.num_evals = 0
@@ -42,6 +43,11 @@ class Branin(BaseTarget):
         else:
             regret = abs(self.optimal_val-self.eval_values[-1])
         self.regret_arr.append(regret)
+
+    def get_results(self) -> dict:
+        return {'eval_positions': self.eval_positions,
+                'eval_values': self.eval_values,
+                'regret': self.regret_arr}
 
     def sample(self,
                x: torch.Tensor

@@ -123,7 +123,7 @@ class WeightedGaussianMixturePosterior(GaussianMixturePosterior):
         return self._mixture_covariance_matrix
 
 
-class SMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
+class SaaSSMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
     """
     A fully Bayesian single-task GP model that uses SMC samples with proper weighting.
     
@@ -160,8 +160,6 @@ class SMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
             weights: Normalized weights for each particle/sample
         """
         self.smc_weights = weights
-
-        print(self.pyro_model.load_mcmc_samples(mcmc_samples=smc_samples))
 
         # if unpacking issues occurs 3 to 4 then add 'input_transform' to the tuple
         (self.mean_module, self.covar_module, self.likelihood, input_transform) = (
@@ -288,7 +286,7 @@ class SMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
     
     def condition_on_observations(
         self, X: Tensor, Y: Tensor, **kwargs: Any
-    ) -> "SMCFullyBayesianSingleTaskGP":
+    ) -> "SaaSSMCFullyBayesianSingleTaskGP":
         """Condition model on additional observations."""
         # This would need to be implemented properly for your use case
         # For now, create a new model with combined data

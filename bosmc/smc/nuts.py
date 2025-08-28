@@ -192,6 +192,59 @@ def _test_gp_target():
     print("NUTS SMC estimate:", smc.get_samples())
     smc.summary()
 
+def _test_nuts_bernouli_mcmc():
+    import pyro.distributions as dist
+    from pyro.infer.mcmc.nuts import NUTS
+    from pyro.infer.mcmc import MCMC
+
+    true_coefs = torch.tensor([1., 2., 3.])
+    data = torch.randn(2000, 3)
+    dim = 3
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+
+    def model(data):
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        return y
+    
+    print("Running SMC...")
+    nuts = NUTS(model, step_size=0.3, max_tree_depth=20)
+    mcmc = MCMC(nuts, warmup_steps= 100 ,num_samples=5)
+    mcmc.run(data)
+    
+    print("\nTrue coefficients:", true_coefs)
+    print("SMC estimate:", mcmc.get_samples()['beta'].mean(0))
+    mcmc.summary()
+    
+    return
+
+def _test_nuts_bernouli_smc():
+    import pyro.distributions as dist
+    from bosmc.smc.api import SMC
+
+    true_coefs = torch.tensor([1., 2., 3.])
+    data = torch.randn(2000, 3)
+    dim = 3
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+
+    def model(data):
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        return y
+    
+    print("Running SMC...")
+    nuts = NUTSSMCKernel(model, step_size=0.3, max_tree_depth=20)
+    smc = SMC(nuts, num_iters= 200, num_samples=20)
+    smc.run(data)
+    
+    print("\nTrue coefficients:", true_coefs)
+    print("SMC estimate:", smc.get_samples()['beta'].mean(0))
+    smc.summary()
+    
+    return
 
 if __name__ == '__main__':
-    _test_gp_target()
+    _test_nuts_bernouli_smc()
+    #_test_gp_target()

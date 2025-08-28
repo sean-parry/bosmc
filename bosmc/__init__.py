@@ -1,2 +1,2 @@
-from bosmc.models import SMCFullyBayesianSingleTaskGP
-from bosmc.fit import fit_fully_bayes_model_nuts, fit_fully_bayes_model_rw
+from bosmc.models import SaaSSMCFullyBayesianSingleTaskGP
+from bosmc.fit import fit_fully_bayesian_model_nuts_smc, fit_fully_bayes_model_rw
