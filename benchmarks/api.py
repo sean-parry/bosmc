@@ -121,7 +121,7 @@ def mcmc_loop(
             thinning=thinning,
             disable_progbar=True,
         )
-        logEI = LogExpectedImprovement(model=model.posterior, best_f=dataset.y.max())
+        logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
         x_star = x_star[0]
@@ -164,7 +164,7 @@ def smc_loop(
             num_samples=num_samples,
             disable_progbar=True,
         )
-        logEI = LogExpectedImprovement(model=model.posterior, best_f=dataset.y.max())
+        logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
         x_star = x_star[0]
@@ -206,7 +206,8 @@ def run_benchmarks_for_mcmc():
             n_bo_evals = BO_EVLAS,
             warm_up_steps= WARMUP_STEPS,
             num_samples=NUM_SAMPLES,
-            thinning=None,
+            thinning=1,
+            disable_prog_bar = False,
         )
 
 def run_benchmarks_for_smc():
@@ -225,6 +226,7 @@ def run_benchmarks_for_smc():
             n_bo_evals = BO_EVLAS,
             warm_up_steps = NUM_ITERS,
             num_samples = NUM_SAMPLES,
+            disable_prog_bar = False,
         )
 
 
@@ -255,6 +257,8 @@ def _benchmark_test():
 
 def main():
     run_benchmarks_for_trad()
+    run_benchmarks_for_mcmc()
+    run_benchmarks_for_smc()
 
 if __name__ == '__main__':
     main()
