@@ -2,6 +2,9 @@
 from tests.target_functions.base import BaseTarget
 from tqdm import tqdm
 
+import pickle
+import os
+
 import torch
 import botorch
 from botorch.models import SingleTaskGP
@@ -33,7 +36,7 @@ class Dataset():
             seed: int, 
             n_iters: int
         ) -> None:
-        assert self.x is None and self.y is None
+        assert self.X is None and self.y is None
         random_gen = torch.Generator().manual_seed(seed)
         rand_vals = torch.rand(size = (n_iters, self.target.dim), 
                                generator=random_gen)
@@ -47,7 +50,7 @@ class Dataset():
             x_star: torch.Tensor,
     ) -> None:
         y_star = self.target.sample(x_star)
-        self.X = torch.cat((self.X, x_star))
+        self.X = torch.cat((self.X, x_star.unsqueeze(0)))
         self.y = torch.cat((self.y, y_star.reshape((-1,1))))
         return
     
@@ -57,13 +60,18 @@ def trad_loop(
         seed: int,
         n_random_evals: int,
         n_bo_evals: int,
-    ) -> None:
+        disable_prog_bar: bool = True,
+    ) -> str:
     assert target.num_evals == 0, 'target must not have been evaluated'
-    save_name = f'trad_{target.target_name}_{seed}_{n_random_evals}_{n_bo_evals}'
+
+    save_name = f'trad_{target.target_name}_{seed}_{n_random_evals}_{n_bo_evals}.pkl'
+    if os.path.exists(save_name):
+        return save_name
+    
     dataset = Dataset(target)
     dataset.random_evals(seed, n_random_evals)
 
-    for _ in tqdm(range(n_bo_evals)):
+    for _ in tqdm(range(n_bo_evals), disable = disable_prog_bar):
         gp = SingleTaskGP(train_X=dataset.X,
                           train_Y=dataset.y,
                           input_transform=Normalize(d=target.dim),
@@ -75,6 +83,12 @@ def trad_loop(
         x_star = x_star[0]
         dataset.eval_x(x_star)
 
+    results = target.get_results()
+    with open(save_name, "wb") as f:
+        pickle.dump(results, f)
+
+    return save_name
+
 def mcmc_loop(
         target: BaseTarget,
         seed: int,
@@ -83,12 +97,18 @@ def mcmc_loop(
         warm_up_steps: int,
         num_samples: int,
         thinning: int,
-    ) -> None:
-    save_name = f'mcmc_{target.target_name}_{seed}_{n_random_evals}_{n_bo_evals}'
+        disable_prog_bar: bool = True,
+    ) -> str:
+    assert target.num_evals == 0, 'target must not have been evaluated'
+
+    save_name = f'mcmc_{target.target_name}_{seed}_{n_random_evals}_{n_bo_evals}.pkl'
+    if os.path.exists(save_name):
+        return save_name
+    
     dataset = Dataset(target)
     dataset.random_evals(seed, n_random_evals)
 
-    for _ in tqdm(range(n_bo_evals)):
+    for _ in tqdm(range(n_bo_evals), disable = disable_prog_bar):
         model = SaasFullyBayesianSingleTaskGP(
             train_X=dataset.X,
             train_Y=dataset.y,
@@ -101,11 +121,17 @@ def mcmc_loop(
             thinning=thinning,
             disable_progbar=True,
         )
-        logEI = LogExpectedImprovement(model=model.posterior, best_f=dataset.y.max())
+        logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
         x_star = x_star[0]
         dataset.eval_x(x_star)
+
+    results = target.get_results()
+    with open(save_name, "wb") as f:
+        pickle.dump(results, f)
+
+    return save_name
 
     
 def smc_loop(
@@ -115,12 +141,18 @@ def smc_loop(
         n_bo_evals: int,
         warm_up_steps: int,
         num_samples: int,
-    ) -> None:
-    save_name = f'smc_{target.target_name}_{seed}_{n_random_evals}_{n_bo_evals}'
+        disable_prog_bar: bool = True,
+    ) -> str:
+    assert target.num_evals == 0, 'target must not have been evaluated'
+
+    save_name = f'smc_{target.target_name}_{seed}_{n_random_evals}_{n_bo_evals}.pkl'
+    if os.path.exists(save_name):
+        return save_name
+    
     dataset = Dataset(target)
     dataset.random_evals(seed, n_random_evals)
 
-    for _ in tqdm(range(n_bo_evals)):
+    for _ in tqdm(range(n_bo_evals), disable = disable_prog_bar):
         model = SaaSSMCFullyBayesianSingleTaskGP(
             train_X=dataset.X,
             train_Y=dataset.y,
@@ -132,17 +164,101 @@ def smc_loop(
             num_samples=num_samples,
             disable_progbar=True,
         )
-        logEI = LogExpectedImprovement(model=model.posterior, best_f=dataset.y.max())
+        logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
         x_star = x_star[0]
         dataset.eval_x(x_star)
 
+    results = target.get_results()
+    with open(save_name, "wb") as f:
+        pickle.dump(results, f)
+
+    return save_name
+
+def run_benchmarks_for_trad():
+    RANDOM_EVALS = 3
+    BO_EVLAS = 97
+    from tests.target_functions.branin import Branin
+    target_type = Branin
+
+    for i in tqdm(range(32)):
+        trad_loop(
+            target=target_type(),
+            seed = i,
+            n_random_evals = RANDOM_EVALS,
+            n_bo_evals = BO_EVLAS
+        )
+
+def run_benchmarks_for_mcmc():
+    RANDOM_EVALS = 3
+    BO_EVLAS = 97
+    WARMUP_STEPS = 128
+    NUM_SAMPLES = 128
+    from tests.target_functions.branin import Branin
+    target_type = Branin
+
+    for i in tqdm(range(32)):
+        mcmc_loop(
+            target=target_type(),
+            seed = i,
+            n_random_evals = RANDOM_EVALS,
+            n_bo_evals = BO_EVLAS,
+            warm_up_steps= WARMUP_STEPS,
+            num_samples=NUM_SAMPLES,
+            thinning=1,
+            disable_prog_bar = False,
+        )
+
+def run_benchmarks_for_smc():
+    RANDOM_EVALS = 3
+    BO_EVLAS = 97
+    NUM_ITERS = 128
+    NUM_SAMPLES = 128
+    from tests.target_functions.branin import Branin
+    target_type = Branin
+
+    for i in tqdm(range(32)):
+        smc_loop(
+            target=target_type(),
+            seed = i,
+            n_random_evals = RANDOM_EVALS,
+            n_bo_evals = BO_EVLAS,
+            warm_up_steps = NUM_ITERS,
+            num_samples = NUM_SAMPLES,
+            disable_prog_bar = False,
+        )
+
+
+
+
 def _benchmark_test():
+    from tests.target_functions.branin import Branin
     seed = 30
+    target_type = Branin
+
+    file_name = trad_loop(
+        target=target_type(),
+        seed = seed,
+        n_random_evals= 5,
+        n_bo_evals = 10
+    )
+
+    with open(file_name, "rb") as f:
+        res: dict = pickle.load(f)
+
+    for key, value in res.items():
+        print(f"{key}:{type(value)} of type {type(value[0])}")
+
+
     
 
     return
 
+def main():
+    run_benchmarks_for_trad()
+    run_benchmarks_for_mcmc()
+    run_benchmarks_for_smc()
+
 if __name__ == '__main__':
-    trad_loop()
+    main()
