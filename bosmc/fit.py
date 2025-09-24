@@ -78,8 +78,14 @@ def fit_fully_bayes_model_rw(
 
 def _test():
     import torch
+    from botorch.acquisition import LogExpectedImprovement
+    from botorch.optim import optimize_acqf
+    from tests.target_functions import Branin
+
     n_data_points = 5
-    dim = 1
+    dim = 2
+    target = Branin()
+    
     train_X = torch.rand((n_data_points, dim), dtype=torch.float64)
     train_y = torch.rand((n_data_points, 1), dtype=torch.float64)
     model = SaaSSMCFullyBayesianSingleTaskGP(train_X, 
@@ -92,8 +98,13 @@ def _test():
                                num_samples = 4,
                                disable_progbar=False)
     
-    test_data: int = 1
-    gauss_mix = model.posterior(torch.rand((test_data, dim), dtype=torch.float64))
+    # some issue with model.posterior doesn't allow this to work
+    logEI = LogExpectedImprovement(model, best_f = train_y.max())
+    x_star, acq_val = optimize_acqf(logEI, 
+                                    bounds = target.bounds, 
+                                    q=1, num_restarts=5, 
+                                    raw_samples=20)
+    x_star = x_star[0]
     return
 
 if __name__ == '__main__':

@@ -160,9 +160,9 @@ def smc_loop(
             outcome_transform=Standardize(m=1),)
         fit_fully_bayesian_model_nuts_smc(
             model = model,
-            warmup_steps=warm_up_steps,
+            num_iters=warm_up_steps,
             num_samples=num_samples,
-            disable_progbar=True,
+            disable_progbar=False,
         )
         logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
@@ -213,7 +213,7 @@ def run_benchmarks_for_mcmc():
 def run_benchmarks_for_smc():
     RANDOM_EVALS = 3
     BO_EVLAS = 97
-    NUM_ITERS = 128
+    NUM_ITERS = 5
     NUM_SAMPLES = 128
     from tests.target_functions.branin import Branin
     target_type = Branin
@@ -256,8 +256,6 @@ def _benchmark_test():
     return
 
 def main():
-    run_benchmarks_for_trad()
-    run_benchmarks_for_mcmc()
     run_benchmarks_for_smc()
 
 if __name__ == '__main__':
