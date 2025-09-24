@@ -39,7 +39,7 @@ def fit_fully_bayesian_model_nuts_smc(
 
     model.load_mcmc_samples(samples)
 
-    model.set_weigths(weights)
+    model.set_weights(weights)
 
     model.eval()
 
@@ -72,7 +72,7 @@ def fit_fully_bayes_model_rw(
 
     model.load_mcmc_samples(samples)
 
-    model.set_weigths(weights)
+    model.set_weights(weights)
 
     model.eval()
 
@@ -105,6 +105,7 @@ def _test():
                                     q=1, num_restarts=5, 
                                     raw_samples=20)
     x_star = x_star[0]
+    print(x_star)
     return
 
 if __name__ == '__main__':

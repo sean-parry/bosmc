@@ -35,6 +35,7 @@ from pyro.ops.integrator import register_exception_handler
 from torch import Tensor
 
 
+
 class WeightedGaussianMixturePosterior(GaussianMixturePosterior):
     r"""A weighted Gaussian mixture posterior.
     
@@ -42,7 +43,11 @@ class WeightedGaussianMixturePosterior(GaussianMixturePosterior):
     using SMC weights or other importance weights.
     """
     
-    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None) -> None:
+    def __init__(
+            self, 
+            distribution: MultivariateNormal, 
+            weights: Optional[Tensor] = None
+        ) -> None:
         r"""A weighted posterior for a fully Bayesian model.
         
         Args:
@@ -124,163 +129,74 @@ class WeightedGaussianMixturePosterior(GaussianMixturePosterior):
 
 
 class SaaSSMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
-    """
-    A fully Bayesian single-task GP model that uses SMC samples with proper weighting.
-    
-    This model uses weighted samples from Sequential Monte Carlo to create a proper
-    Bayesian mixture posterior that accounts for particle weights.
-    
-    Example:
-        >>> smc_gp = SMCFullyBayesianSingleTaskGP(train_X, train_Y)
-        >>> # Run SMC sampling
-        >>> samples, weights = smc.get_weighted_samples()
-        >>> smc_gp.load_smc_samples(samples, weights)
-        >>> posterior = smc_gp.posterior(test_X)
-    """
+    """A fully Bayesian GP model that uses an SMC approach."""
 
-    _is_fully_bayesian = True
-    _is_ensemble = True
-    _pyro_model_class: type[PyroModel] = SaasPyroModel
-    smc_weights: torch.Tensor = None
-    
-    def _check_if_fitted(self) -> None:
-        """Check if model has been fitted with SMC samples."""
-        if self.covar_module is None:
-            raise RuntimeError(
-                "Model has not been fitted. You need to call "
-                "`load_smc_samples` with SMC samples and weights."
-            )
-    
-    def load_smc_samples(self, smc_samples: Dict[str, Tensor], weights: Tensor) -> None:
-        """
-        Load SMC samples and weights into the model.
-        
+    def __init__(
+        self,
+        train_X: Tensor,
+        train_Y: Tensor,
+        outcome_transform: Optional[OutcomeTransform] = None,
+        input_transform: Optional[InputTransform] = None,
+        train_Yvar: Optional[Tensor] = None,
+    ) -> None:
+        """SaaSSMCFullyBayesianSingleTaskGP.
+
         Args:
-            smc_samples: Dictionary of parameter samples from SMC
-            weights: Normalized weights for each particle/sample
+            train_X: Training inputs.
+            train_Y: Training targets.
+            outcome_transform: The outcome transform.
+            input_transform: The input transform.
+            train_Yvar: Optional training observation variance.
         """
-        self.smc_weights = weights
-
-        # if unpacking issues occurs 3 to 4 then add 'input_transform' to the tuple
-        (self.mean_module, self.covar_module, self.likelihood, input_transform) = (
-            self.pyro_model.load_mcmc_samples(mcmc_samples=smc_samples)
+        super().__init__(
+            train_X=train_X,
+            train_Y=train_Y,
+            outcome_transform=outcome_transform,
+            input_transform=input_transform,
+            train_Yvar=train_Yvar,
         )
-        if input_transform is not None:
-            if hasattr(self, "input_transform"):
-                tfs = [self.input_transform]
-                if isinstance(input_transform, ChainedInputTransform):
-                    tfs.extend(list(input_transform.values()))
-                else:
-                    tfs.append(input_transform)
-                self.input_transform = ChainedInputTransform(
-                    **{f"tf{i}": tf for i, tf in enumerate(tfs)}
-                )
-            else:
-                self.input_transform = input_transform
+        self.smc_weights = None  # Add a property to store the SMC weights
 
-    def postprocess_smc_samples(
-        self, smc_samples: dict[str, Tensor]
-    ) -> dict[str, Tensor]:
-        r"""Post-process the SMC Samples."""
-        inv_length_sq = (
-            smc_samples["kernel_tausq"].unsqueeze(-1)
-            * smc_samples["_kernel_inv_length_sq"]
-        )
-        smc_samples["lengthscale"] = inv_length_sq.rsqrt()
-        # Delete `kernel_tausq` and `_kernel_inv_length_sq` since they aren't loaded
-        # into the final model.
-        del smc_samples["kernel_tausq"], smc_samples["_kernel_inv_length_sq"]
-        return smc_samples
-    
-    def set_weigths(self, weights: torch.Tensor) -> None:
-        self.smc_weights = weights
-    
-    def forward(self, X: Tensor) -> MultivariateNormal:
-        """
-        Forward pass through the batched GP model.
-        
-        Returns unweighted multivariate normal predictor
-        """
-        self._check_if_fitted()
-        
-        # Transform inputs
-        X = self.transform_inputs(X)
-        
-        # Add batch dimension if needed
-        if X.ndim == 2:
-            X = X.unsqueeze(0).expand(len(self.smc_weights), -1, -1)
-            
-        mean_x = self.mean_module(X)
-        covar_x = self.covar_module(X)
-        return MultivariateNormal(mean_x, covar_x)
-    
     def posterior(
         self,
         X: Tensor,
         output_indices: Optional[List[int]] = None,
-        observation_noise: bool = False,
-        posterior_transform: Optional[PosteriorTransform] = None,
         **kwargs: Any,
     ) -> WeightedGaussianMixturePosterior:
-        """
-        Compute weighted posterior over model outputs.
-        
+        """Computes the posterior using the SMC samples and weights.
+
         Args:
-            X: Test points (batch_shape x q x d)
-            output_indices: Output indices to compute posterior over
-            observation_noise: Whether to include observation noise
-            posterior_transform: Optional posterior transform
-            
-        Returns:
-            WeightedGaussianMixturePosterior
-            functionally the same as GaussianMixturePosterior
+            X: The test inputs.
+            output_indices: The output indices.
         """
-        self._check_if_fitted()
-        
-        # Transform inputs
-        X = self.transform_inputs(X)
-        
-        # Add batch dimension for each SMC sample
-        if X.ndim == 2:
-            X = X.unsqueeze(MCMC_DIM)  # Add MCMC dimension
-            X = X.expand(len(self.smc_weights), -1, -1)
-            
-        # Get forward prediction
-        with torch.no_grad():
-            mvn = self(X)
-            if observation_noise:
-                mvn = self.likelihood(mvn)
-            
-        # Apply posterior transform if provided
-        if posterior_transform is not None:
-            mvn = posterior_transform(mvn)
-            
-        # Return weighted mixture posterior
-        return WeightedGaussianMixturePosterior(
-            distribution=mvn,
-            weights=self.smc_weights,
-        )
-    
-    @property 
-    def batch_shape(self) -> torch.Size:
-        """Batch shape of the model."""
-        if self.smc_weights is not None:
-            return torch.Size([len(self.smc_weights)])
-        return torch.Size([])
-    
-    def train(self, mode: bool = True):
+        distribution = super().posterior(X, output_indices).distribution
+        return WeightedGaussianMixturePosterior(distribution=distribution, weights=self.smc_weights)
+
+    def load_smc_samples(self, smc_samples: Dict[str, Tensor], weights: Tensor) -> None:
+        """Loads SMC samples and their corresponding weights into the model.
+
+        Args:
+            smc_samples: A dictionary of SMC samples.
+            weights: A tensor of SMC weights.
+        """
+        # Call the parent class's method to load the samples
+        super().load_mcmc_samples(smc_samples)
+        # Store the weights separately for the custom posterior
+        self.set_weights(weights)
+
+    def set_weights(self, weights: Tensor) -> None:
+        """Sets the SMC weights for the model.
+
+        Args:
+            weights: A tensor of SMC weights.
+        """
+        self.smc_weights = weights
+
+    def train(self, mode: bool = True) -> "SaaSSMCFullyBayesianSingleTaskGP":
         """Put model in train mode."""
-        if hasattr(self, 'training'):
-            self.training = mode
-        if mode:
-            # Reset fitted components when entering train mode
-            self.mean_module = None
-            self.covar_module = None
-            self.likelihood = None
-            self.smc_weights = None
-        return self
-    
-    def eval(self):
+        return super().train(mode=mode)
+
+    def eval(self) -> "SaaSSMCFullyBayesianSingleTaskGP":
         """Put model in eval mode."""
         return self.train(mode=False)
     
@@ -300,7 +216,6 @@ class SaaSSMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
                 train_Yvar=None,  # You may need to handle this properly
                 outcome_transform=getattr(self, 'outcome_transform', None),
                 input_transform=getattr(self, 'input_transform', None),
-                kernel_type=self.kernel_type
             )
             
             # If this model is fitted, you'd need to handle transferring samples
@@ -310,4 +225,5 @@ class SaaSSMCFullyBayesianSingleTaskGP(SaasFullyBayesianSingleTaskGP):
             
             return new_model
         else:
-            raise RuntimeError("Cannot condition model - original training data not available")
+            raise RuntimeError("Cannot condition model - original training data not found.")
+
