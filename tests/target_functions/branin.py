@@ -54,7 +54,7 @@ class Branin(BaseTarget):
                ) -> torch.Tensor:
         """
         R2 to R
-        returns -ans, (this is a function to maximize)
+        returns -ans, (sample is a function we wish to maximize)
         """
         self.num_evals += 1
         self.eval_positions.append(x)
