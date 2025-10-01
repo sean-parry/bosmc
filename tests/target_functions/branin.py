@@ -2,8 +2,6 @@ import torch
 
 from tests.target_functions.base import BaseTarget
 
-from scipy.optimize import Bounds
-
 class Branin(BaseTarget):
     """
     2 dimensional branin target toy problem, limits should be x0 [-5, 10] x1 [0, 15]
