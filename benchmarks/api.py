@@ -233,7 +233,28 @@ def run_benchmarks_for_smc():
     for i in tqdm(range(32)):
         smc_loop(
             target=target_type(),
-            seed = i,
+            seed = rand_val,
+            n_random_evals = RANDOM_EVALS,
+            n_bo_evals = BO_EVLAS,
+            warm_up_steps = NUM_ITERS,
+            num_samples = NUM_SAMPLES,
+            disable_prog_bar = False,
+        )
+        
+
+def run_benchmarks_for_smc_seed_list(rand_vals: list[int]):
+    RANDOM_EVALS = 3
+    BO_EVLAS = 97
+    NUM_ITERS = 128
+    NUM_SAMPLES = 128
+    from tests.target_functions.branin import Branin
+    target_type = Branin
+
+    for rand_val in rand_vals:
+        print(rand_val)
+        smc_loop(
+            target=target_type(),
+            seed = rand_val,
             n_random_evals = RANDOM_EVALS,
             n_bo_evals = BO_EVLAS,
             warm_up_steps = NUM_ITERS,
@@ -268,7 +289,7 @@ def _benchmark_test():
     return
 
 def main():
-    run_benchmarks_for_smc()
+    run_benchmarks_for_smc([3, 4, 5])
 
 if __name__ == '__main__':
     main()

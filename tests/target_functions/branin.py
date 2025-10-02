@@ -2,8 +2,6 @@ import torch
 
 from tests.target_functions.base import BaseTarget
 
-from scipy.optimize import Bounds
-
 class Branin(BaseTarget):
     """
     2 dimensional branin target toy problem, limits should be x0 [-5, 10] x1 [0, 15]
@@ -54,7 +52,7 @@ class Branin(BaseTarget):
                ) -> torch.Tensor:
         """
         R2 to R
-        returns -ans, (this is a function to maximize)
+        returns -ans, (sample is a function we wish to maximize)
         """
         self.num_evals += 1
         self.eval_positions.append(x)
