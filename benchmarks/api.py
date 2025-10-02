@@ -221,7 +221,7 @@ def run_benchmarks_for_smc():
     for i in tqdm(range(32)):
         smc_loop(
             target=target_type(),
-            seed = rand_val,
+            seed = i,
             n_random_evals = RANDOM_EVALS,
             n_bo_evals = BO_EVLAS,
             warm_up_steps = NUM_ITERS,
@@ -277,7 +277,7 @@ def _benchmark_test():
     return
 
 def main():
-    run_benchmarks_for_smc([3, 4, 5])
+    run_benchmarks_for_smc()
 
 if __name__ == '__main__':
     main()
