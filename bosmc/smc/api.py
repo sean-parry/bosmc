@@ -9,6 +9,7 @@ import tqdm
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Dict, Optional, List, Callable
+from concurrent.futures import ProcessPoolExecutor
 
 import torch
 import torch.multiprocessing as mp
@@ -39,6 +40,16 @@ import pyro
 import pyro.distributions as dist
 from bosmc.smc.smc_kernel import SMCKernel
 from pyro.infer.mcmc.util import initialize_model
+
+def _update_particle_static(args):
+    """
+    Static worker function for process pool. 
+    Takes a tuple (kernel, particle) and returns the result of the kernel's sample method.
+    """
+    kernel, particle = args
+    # Note: Any setup or context needed by the kernel must be initialized here
+    # or be part of the kernel object itself.
+    return kernel.sample(particle)
 
 
 class AbstractSMC(ABC):
@@ -192,6 +203,10 @@ class SMC(AbstractSMC):
     def run(self, *args, **kwargs):
         """Run SMC to generate samples."""
         self._args, self._kwargs = args, kwargs
+
+        def particle_updater(i):
+            new_particle, inc_log_weight = self.kernels[i].sample(particles[i])
+            return new_particle, inc_log_weight
         
         with optional(
             pyro.validation_enabled(not self.disable_validation),
@@ -234,11 +249,15 @@ class SMC(AbstractSMC):
                 new_particles = []
                 incremental_log_weights = torch.zeros(self.num_samples)
                 
-                for i in range(self.num_samples):
-                    # Use particle i with kernel i
-                    new_particle, inc_log_weight = self.kernels[i].sample(particles[i])
-                    new_particles.append(new_particle)
-                    incremental_log_weights[i] = inc_log_weight
+                kernel_particle_pairs = zip(self.kernels, particles)
+                with ProcessPoolExecutor() as executor:
+                    results = list(executor.map(_update_particle_static, kernel_particle_pairs))
+                            
+                new_particles, incremental_log_weights = zip(*results)
+            
+                # Convert results back to the correct format
+                particles = list(new_particles)
+                incremental_log_weights = torch.tensor(incremental_log_weights, dtype = torch.float32)
                 
                 # Update log weights
                 log_weights = log_weights + incremental_log_weights
@@ -365,10 +384,11 @@ def _test_nuts():
     dim = 3
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
-    def model(data):
+    def model(data, idx=1):
         coefs_mean = torch.zeros(dim)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
-        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        name = f"beta_{idx}" if idx is not None else "beta"
+        coefs = pyro.sample(name, dist.Normal(coefs_mean, torch.ones(dim)))
+        y = pyro.sample("y", dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
     
     print("Running SMC...")

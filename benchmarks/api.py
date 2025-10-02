@@ -108,12 +108,18 @@ def mcmc_loop(
     dataset = Dataset(target)
     dataset.random_evals(seed, n_random_evals)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     for _ in tqdm(range(n_bo_evals), disable = disable_prog_bar):
         model = SaasFullyBayesianSingleTaskGP(
             train_X=dataset.X,
             train_Y=dataset.y,
             input_transform=Normalize(d=target.dim),
-            outcome_transform=Standardize(m=1),)
+            outcome_transform=Standardize(m=1),
+        )
+
+        model = model.to(device)
+
         fit_fully_bayesian_model_nuts(
             model = model,
             warmup_steps=warm_up_steps,
@@ -149,6 +155,8 @@ def smc_loop(
     if os.path.exists(save_name):
         return save_name
     
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     dataset = Dataset(target)
     dataset.random_evals(seed, n_random_evals)
 
@@ -157,7 +165,11 @@ def smc_loop(
             train_X=dataset.X,
             train_Y=dataset.y,
             input_transform=Normalize(d=target.dim),
-            outcome_transform=Standardize(m=1),)
+            outcome_transform=Standardize(m=1),
+        )
+        
+        model = model.to(device)
+
         fit_fully_bayesian_model_nuts_smc(
             model = model,
             num_iters=warm_up_steps,
@@ -213,7 +225,7 @@ def run_benchmarks_for_mcmc():
 def run_benchmarks_for_smc():
     RANDOM_EVALS = 3
     BO_EVLAS = 97
-    NUM_ITERS = 5
+    NUM_ITERS = 128
     NUM_SAMPLES = 128
     from tests.target_functions.branin import Branin
     target_type = Branin
