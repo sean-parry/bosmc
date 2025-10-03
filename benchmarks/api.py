@@ -20,6 +20,8 @@ from botorch.models.fully_bayesian import SaasFullyBayesianSingleTaskGP
 from bosmc.fit import fit_fully_bayesian_model_nuts_smc
 from bosmc.models import SaaSSMCFullyBayesianSingleTaskGP
 
+DATA_DEVICE = torch.device("cpu") # pyro is quicker with the data on the cpu
+MODEL_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # but the model on the gpu
 
 class Dataset():
     X: torch.Tensor | None = None
@@ -37,11 +39,14 @@ class Dataset():
             n_iters: int
         ) -> None:
         assert self.X is None and self.y is None
-        random_gen = torch.Generator().manual_seed(seed)
+        random_gen = torch.Generator(device=DATA_DEVICE).manual_seed(seed)
         rand_vals = torch.rand(size = (n_iters, self.target.dim), 
-                               generator=random_gen)
-        X = self.target.bounds[0] + (self.target.bounds[1]-self.target.bounds[0]) * rand_vals
-        y = torch.tensor([self.target.sample(x) for x in X])
+                               generator=random_gen,
+                               device=DATA_DEVICE)
+        a = self.target.bounds[0].to(DATA_DEVICE)
+        b = self.target.bounds[1].to(DATA_DEVICE)
+        X = (a + (b-a)) * rand_vals
+        y = torch.tensor([self.target.sample(x) for x in X], device=DATA_DEVICE)
         self.X = X
         self.y = y.reshape(-1, 1)
 
@@ -49,7 +54,7 @@ class Dataset():
             self,
             x_star: torch.Tensor,
     ) -> None:
-        y_star = self.target.sample(x_star)
+        y_star = self.target.sample(x_star).to(DATA_DEVICE)
         self.X = torch.cat((self.X, x_star.unsqueeze(0)))
         self.y = torch.cat((self.y, y_star.reshape((-1,1))))
         return
@@ -72,15 +77,20 @@ def trad_loop(
     dataset.random_evals(seed, n_random_evals)
 
     for _ in tqdm(range(n_bo_evals), disable = disable_prog_bar):
-        gp = SingleTaskGP(train_X=dataset.X,
-                          train_Y=dataset.y,
-                          input_transform=Normalize(d=target.dim),
-                          outcome_transform=Standardize(m=1),)
+        gp = SingleTaskGP(
+            train_X=dataset.X,
+            train_Y=dataset.y,
+            input_transform=Normalize(d=target.dim),
+            outcome_transform=Standardize(m=1),
+        )
+        
+        gp.to(MODEL_DEVICE)
+
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_mll(mll)
         logEI = LogExpectedImprovement(model=gp, best_f=dataset.y.max())
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
-        x_star = x_star[0]
+        x_star = x_star[0].to(DATA_DEVICE)
         dataset.eval_x(x_star)
 
     results = target.get_results()
@@ -113,7 +123,11 @@ def mcmc_loop(
             train_X=dataset.X,
             train_Y=dataset.y,
             input_transform=Normalize(d=target.dim),
-            outcome_transform=Standardize(m=1),)
+            outcome_transform=Standardize(m=1),
+        )
+        
+        model.to(MODEL_DEVICE)
+
         fit_fully_bayesian_model_nuts(
             model = model,
             warmup_steps=warm_up_steps,
@@ -124,7 +138,7 @@ def mcmc_loop(
         logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
-        x_star = x_star[0]
+        x_star = x_star[0].to(DATA_DEVICE)
         dataset.eval_x(x_star)
 
     results = target.get_results()
@@ -153,11 +167,16 @@ def smc_loop(
     dataset.random_evals(seed, n_random_evals)
 
     for _ in tqdm(range(n_bo_evals), disable = disable_prog_bar):
+
         model = SaaSSMCFullyBayesianSingleTaskGP(
             train_X=dataset.X,
             train_Y=dataset.y,
             input_transform=Normalize(d=target.dim),
-            outcome_transform=Standardize(m=1),)
+            outcome_transform=Standardize(m=1),
+        )
+
+        model.to(MODEL_DEVICE)
+        
         fit_fully_bayesian_model_nuts_smc(
             model = model,
             num_iters=warm_up_steps,
@@ -167,7 +186,7 @@ def smc_loop(
         logEI = LogExpectedImprovement(model=model, best_f=dataset.y.max())
         
         x_star, acq_val = optimize_acqf(logEI, bounds=target.bounds, q=1, num_restarts=5, raw_samples=20)
-        x_star = x_star[0]
+        x_star = x_star[0].to(DATA_DEVICE)
         dataset.eval_x(x_star)
 
     results = target.get_results()
@@ -226,7 +245,7 @@ def run_benchmarks_for_smc():
             n_bo_evals = BO_EVLAS,
             warm_up_steps = NUM_ITERS,
             num_samples = NUM_SAMPLES,
-            disable_prog_bar = False,
+            disable_prog_bar = True,
         )
         
 
