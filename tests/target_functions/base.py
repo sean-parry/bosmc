@@ -17,6 +17,7 @@ class BaseTarget(ABC):
         self.dim: int | None = None
         self.bounds: torch.Tensor | None = None
         self.target_name: str = None
+        self._run_time: str = None # run time for notebooks
         pass
 
     @abstractmethod

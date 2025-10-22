@@ -9,7 +9,7 @@ class Hartmann(BaseTarget):
         super().__init__()
 
         self.dim = dim
-        self.bounds = torch.tensor([[0, 1]*dim]).to(torch.double)
+        self.bounds = torch.tensor([[0]*dim, [1]*dim]).to(torch.double)
         self.target_name = f'hartmann{dim}'
 
         # values for tracking

@@ -9,7 +9,7 @@ class Ackley(BaseTarget):
         super().__init__()
 
         self.dim = dim
-        self.bounds = torch.tensor([[-32.768, 32.768]*dim]).to(torch.double)
+        self.bounds = torch.tensor([[-32.768]*dim, [32.768]*dim]).to(torch.double)
         self.target_name = f'ackley{dim}'
 
         # values for tracking
@@ -52,20 +52,9 @@ class Ackley(BaseTarget):
     
 
 def main():
-    dim = 10
-    minima = torch.tensor(
-        data = [0]*dim,
-        dtype = torch.float64
-        )
-    random_val = torch.rand(size = (dim,))
-
-    target = Ackley(dim)
-    val_rand = target.sample(random_val)
-    val_opt = target.sample(minima)
-    print(f'The optimal value was evaluated it is{val_opt}'
-          f'additional a random val was evaled {val_rand}')
+    ack = Ackley()
+    print(ack.bounds)
     
-    print(f'The results dict for this target is:\n{target.get_results()}')
 
 if __name__ == '__main__':
     main()

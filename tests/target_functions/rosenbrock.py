@@ -5,11 +5,11 @@ from botorch.test_functions.synthetic import Rosenbrock as _Rosenbrock
 
 
 class Rosenbrock(BaseTarget):
-    def __init__(self, dim: int = 6) -> None:
+    def __init__(self, dim: int = 4) -> None:
         super().__init__()
 
         self.dim = dim
-        self.bounds = torch.tensor([[0, 1]*dim]).to(torch.double)
+        self.bounds = torch.tensor([[-5]*dim, [10]*dim]).to(torch.double)
         self.target_name = f'hartmann{dim}'
 
         # values for tracking
