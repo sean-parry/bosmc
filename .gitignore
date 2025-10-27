@@ -1,4 +1,4 @@
 __pycache__/
-*.pkl
+data/_branin_data/
 *.out
 env/

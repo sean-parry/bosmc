@@ -19,8 +19,9 @@ class Ackley(BaseTarget):
 
         self.regret_arr = []
         self.optimal_val = 0.0
-
-        self.bo_ackley = _Ackley(dim)
+        
+        botorch_bounds = [(-32.77, 32.77) for _ in range(dim)]
+        self.bo_ackley = _Ackley(dim, bounds = botorch_bounds)
         return
     
     def _update_regret(self):
@@ -52,8 +53,9 @@ class Ackley(BaseTarget):
     
 
 def main():
-    ack = Ackley()
+    ack = Ackley(dim=2)
     print(ack.bounds)
+    ack.sample(torch.tensor([-32.768, 32.768]))
     
 
 if __name__ == '__main__':
